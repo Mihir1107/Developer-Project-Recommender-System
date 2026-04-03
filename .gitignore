@@ -1,0 +1,32 @@
+## Dependencies
+node_modules/
+frontend/node_modules/
+
+## Python
+backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+## Environment
+.env
+.env.local
+.env.production
+
+## IDE
+.vscode/
+.idea/
+
+## Claude
+.claude/
+CLAUDE.md
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Build
+frontend/build/
