@@ -27,12 +27,15 @@ A full-stack application that recommends software project ideas based on your sk
 │   └── venv/              # Virtual environment
 ├── frontend/
 │   ├── public/
+│   │   └── index.html
 │   ├── src/
-│   │   ├── App.js         # Main app component
-│   │   ├── App.css        # Styles
+│   │   ├── App.js         # Main app component + mode routing
+│   │   ├── App.css        # Global layout and component styles
 │   │   ├── ProjectCard.js # Project card component
+│   │   ├── WhatIfPanel.js # What-If skill simulator panel
+│   │   ├── DecideMode.js  # Top-3 decision mode component
 │   │   ├── index.js       # Entry point
-│   │   └── index.css      # Global styles
+│   │   └── index.css      # CSS variables and design tokens
 │   └── package.json
 ├── data/
 │   └── projects.csv       # Dataset (55 projects)
@@ -66,6 +69,7 @@ Frontend runs at `http://localhost:3000`.
 ## API Endpoints
 
 ### POST /recommend
+
 ```json
 {
   "skills": ["Python", "ML"],
@@ -77,6 +81,7 @@ Frontend runs at `http://localhost:3000`.
 Returns top 5 projects with name, description, tech stack, difficulty, recommendation reason, and missing skills.
 
 ### POST /next-projects
+
 ```json
 {
   "completed_project_id": 1,
@@ -87,28 +92,47 @@ Returns top 5 projects with name, description, tech stack, difficulty, recommend
 Returns 3 progression project suggestions.
 
 ### GET /health
+
 Returns system status and loaded project count.
 
 ## Features
 
+### Core
 - Explainable recommendations with reasoning
 - Difficulty-based filtering (beginners won't see advanced projects)
 - Skill gap detection (shows what you need to learn)
 - Bookmark/save projects (persisted in localStorage)
-- Project progression suggestions
 - Responsive design with dark theme
 - Loading animations and smooth transitions
+
+### What-If Skill Simulator
+Add hypothetical skills you don't have yet and instantly compare two scenarios side by side — your current profile vs. your hypothetical one. Projects unlocked exclusively by the new skill are highlighted with a ✦ **Unlocked** badge and a distinct cyan glow, making the learning value of any skill immediately visible.
+
+### Explore / Decide Modes
+Two distinct interaction modes accessible via a nav toggle (appears after the first search):
+
+- **Explore mode** — full ranked results list with the What-If simulator for open-ended browsing
+- **Decide mode** — narrows to the top 3 picks shown side by side, each with a single strongest reason and a "Commit to this →" CTA to reduce decision fatigue
+
+## UI Design
+
+The frontend uses a **Terminal Craft** design system — a developer-native dark theme with a cyan/violet accent palette, JetBrains Mono for labels and tags, and Inter for body text. Key design tokens are defined as CSS variables in `index.css` for full consistency across components.
 
 ## Deployment
 
 ### Backend (Render)
+
 1. Push backend code to GitHub
 2. Create a new Web Service on [Render](https://render.com)
 3. Set build command: `pip install -r requirements.txt`
 4. Set start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 ### Frontend (Vercel)
+
 1. Push frontend code to GitHub
 2. Import project on [Vercel](https://vercel.com)
 3. Set `REACT_APP_API_URL` environment variable to your Render backend URL
 4. Deploy
+
+
+## Created By Mihir Mandavia & Haya Sachin
