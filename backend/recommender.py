@@ -70,33 +70,55 @@ class ProjectRecommender:
         interests: list[str],
         level: str,
         top_n: int = 5,
+        free_query: str = "",
+        liked_ids: list[int] | None = None,
+        excluded_ids: list[int] | None = None,
     ) -> list[dict]:
         """
         Pipeline:
-        1. Filter by difficulty
-        2. TF-IDF cosine similarity against user query
+        1. Filter by difficulty; drop user-excluded projects
+        2. TF-IDF cosine similarity against user query (+ optional free text)
         3. Hybrid score = 0.7 * similarity + 0.3 * popularity
-        4. Return top N with explanations and skill gaps
+        4. Feedback boost: add 0.25 * avg_similarity_to_liked_projects
+        5. Return top N with explanations, skill gaps, and confidence level
         """
         filtered = self._filter_by_difficulty(level)
+        if filtered.empty:
+            return []
+
+        # Drop projects the user flagged as too easy / too hard
+        if excluded_ids:
+            filtered = filtered[~filtered["project_id"].isin(excluded_ids)]
         if filtered.empty:
             return []
 
         filtered_indices = filtered.index.tolist()
         filtered_tfidf = self.tfidf_matrix[filtered_indices]
 
-        query = " ".join(skills + interests).lower()
+        # Combine profile query with optional free-text description
+        base_query = " ".join(skills + interests).lower()
+        query = f"{base_query} {free_query.lower()}".strip() if free_query.strip() else base_query
         query_vec = self.vectorizer.transform([query])
         similarities = cosine_similarity(query_vec, filtered_tfidf).flatten()
 
         popularity = filtered["popularity_score"].values
         scores = 0.7 * similarities + 0.3 * popularity
 
+        # Feedback loop: boost candidates similar to bookmarked/liked projects
+        if liked_ids:
+            liked_rows = self.df[self.df["project_id"].isin(liked_ids)]
+            if not liked_rows.empty:
+                liked_vecs = self.tfidf_matrix[liked_rows.index.tolist()]
+                liked_sims = cosine_similarity(liked_vecs, filtered_tfidf).mean(axis=0)
+                scores = scores + 0.25 * liked_sims
+
         top_idx = scores.argsort()[::-1][:top_n]
 
         results = []
         for i in top_idx:
             row = filtered.iloc[i]
+            raw_sim = float(similarities[i])
+            confidence = "high" if raw_sim >= 0.25 else "medium" if raw_sim >= 0.10 else "low"
             results.append({
                 "project_id": int(row["project_id"]),
                 "project_name": row["project_name"],
@@ -107,9 +129,53 @@ class ProjectRecommender:
                 "score": round(float(scores[i]), 4),
                 "reason": self._generate_reason(skills, interests, row),
                 "missing_skills": self._detect_skill_gaps(skills, row["tech_stack"]),
+                "confidence": confidence,
             })
 
         return results
+
+    def get_all_skills(self) -> list[str]:
+        """Return sorted list of unique skills from the tech_stack column."""
+        skills: set[str] = set()
+        for cell in self.df["tech_stack"]:
+            for s in cell.split(";"):
+                s = s.strip()
+                if s:
+                    skills.add(s)
+        return sorted(skills)
+
+    def get_all_interests(self) -> list[str]:
+        """Return sorted list of unique interests from the tags column."""
+        interests: set[str] = set()
+        for cell in self.df["tags"]:
+            for t in cell.split(";"):
+                t = t.strip()
+                if t:
+                    interests.add(t)
+        return sorted(interests)
+
+    def get_similar(self, project_id: int, top_n: int = 4) -> list[dict]:
+        """Return the top_n most similar projects by TF-IDF cosine similarity."""
+        row = self.df[self.df["project_id"] == project_id]
+        if row.empty:
+            return []
+        row = row.iloc[0]
+        project_vec = self.tfidf_matrix[row.name]
+        sims = cosine_similarity(project_vec, self.tfidf_matrix).flatten()
+        sims[row.name] = -1  # exclude the source project
+        top_idx = sims.argsort()[::-1][:top_n]
+        return [
+            {
+                "project_id": int(self.df.iloc[i]["project_id"]),
+                "project_name": self.df.iloc[i]["project_name"],
+                "description": self.df.iloc[i]["description"],
+                "difficulty": self.df.iloc[i]["difficulty"].capitalize(),
+                "tech_stack": [s.strip() for s in self.df.iloc[i]["tech_stack"].split(";")],
+                "github_link": self.df.iloc[i]["github_link"],
+                "score": round(float(sims[i]), 4),
+            }
+            for i in top_idx
+        ]
 
     def get_next_projects(self, completed_id: int, level: str) -> list[dict]:
         """Suggest progression projects — same or one level harder."""
